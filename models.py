@@ -77,19 +77,34 @@ class ResNetv2(nn.Module):
         return x
 
 class Dumbledore(nn.Module):
-    def __init__(self,encoder_experiment_name,sequence_length,hidden_size=16,num_layers=1,dropout=.1,frozen_encoder=True) -> None:
+    def __init__(self,encoder_experiment_name,sequence_length,hidden_size=16,num_layers=1,dropout=.1,frozen_encoder=True,bidirectional=True) -> None:
         super().__init__()
         self.frozen = frozen_encoder
+        self.bidirectional = bidirectional
         self.sequence_length = sequence_length
         self.encoder = self.get_encoder(encoder_experiment_name)
-        self.lstm = nn.LSTM(input_size=3, hidden_size=hidden_size, num_layers=num_layers, batch_first=True, dropout=dropout)
-        self.classifier = nn.Linear(in_features=hidden_size,out_features=3)
+        self.lstm = nn.LSTM(input_size=3, hidden_size=hidden_size, num_layers=num_layers, batch_first=True, dropout=dropout,bidirectional=bidirectional)
+        if bidirectional:
+            self.classifier = nn.Linear(in_features=hidden_size*2,out_features=3)
+        else:
+            self.classifier = nn.Linear(in_features=hidden_size,out_features=3)
+
     def forward(self,x):
         x = x.flatten(0,1)
         x = self.encoder(x)
         x = x.reshape(-1,self.sequence_length,3)
         output, (hn, cn) = self.lstm(x)
-        x = nn.functional.relu(output[:,-1])
+
+        if self.bidirectional:
+            # For bidirectional LSTM, concatenate the last forward output and the first backward output
+            forward_output = output[:, -1, :self.lstm.hidden_size]  # Last time step for forward LSTM
+            backward_output = output[:, 0, self.lstm.hidden_size:]  # First time step for backward LSTM
+            
+            # Concatenate forward and backward outputs
+            x = torch.cat((forward_output, backward_output), dim=1)
+        else:
+            x = output[:,-1]
+        x = nn.functional.relu(x)
         x = self.classifier(x)
         return x
     def get_encoder(self,encoder_experiment_path):
