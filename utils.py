@@ -92,7 +92,7 @@ def plot_loss(state):
     plt.plot(state['trainlossi'][5:])
     plt.plot(state['testlossi'][5:])
     plt.yscale('log')
-    plt.savefig(f'experiments/{state["start_time"]}/loss.jpg')
+    plt.savefig(f'{state["experiments_path"]}/{state["start_time"]}/loss.jpg')
     plt.savefig(f'loss.jpg')
     plt.close()
 import pandas as pd
@@ -231,8 +231,5 @@ def plot_loss_curves(plot_df,moving_window_length):
     # Adjust layout
     plt.tight_layout()
     plt.subplots_adjust(wspace=0.3)
-
-    # Save the plot to a PDF file with high resolution
-    plt.savefig('loss_curves_professional.jpg', dpi=300)
 
     plt.show()

@@ -94,8 +94,8 @@ class Dumbledore(nn.Module):
         x = nn.functional.relu(output[:,-1])
         x = self.classifier(x)
         return x
-    def get_encoder(self,encoder_experiment_name):
-        state = torch.load(f'experiments/{encoder_experiment_name}/state.pt',map_location='cpu',weights_only=False)
+    def get_encoder(self,encoder_experiment_path):
+        state = torch.load(f'{encoder_experiment_path}/state.pt',map_location='cpu',weights_only=False)
         encoder = copy.deepcopy(state['model'])
         encoder.load_state_dict(state['best_model_wts'])
         if self.frozen:
