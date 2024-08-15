@@ -87,12 +87,12 @@ def train(state,trainloader,testloader):
     return state
 
 import matplotlib.pyplot as plt
-def plot_loss(state):
+def plot_loss(state,experiments_path=f'experiments'):
     plt.figure()
     plt.plot(state['trainlossi'][5:])
     plt.plot(state['testlossi'][5:])
     plt.yscale('log')
-    plt.savefig(f'{state["experiments_path"]}/{state["start_time"]}/loss.jpg')
+    plt.savefig(f'{experiments_path}/{state["start_time"]}/loss.jpg')
     plt.savefig(f'loss.jpg')
     plt.close()
 import pandas as pd
@@ -193,7 +193,7 @@ def plot_loss_curves(plot_df,moving_window_length):
     ax0.set_xlabel('Epoch', fontsize=16, labelpad=15)
     ax0.set_ylabel('Loss', fontsize=16, labelpad=15)
     ax0.set_yscale('log')
-    ax0.set_ylim([0.00001,.4])
+    # ax0.set_ylim([0.00001,.4])
     
     ax0.tick_params(axis='both', which='major', labelsize=14)
     ax0.grid(True, which='both', linestyle='--', linewidth=0.5)
