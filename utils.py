@@ -153,8 +153,6 @@ def plot_loss_curves(plot_df,moving_window_length):
     plot_df['best_dev_loss'] = plot_df['best_dev_loss'].apply(lambda x: f'{x:.4f}')
     plot_df['best_dev_f1'] = plot_df['best_dev_f1'].apply(lambda x: f'{x:.4f}' if not pd.isnull(x) else '')
 
-
-
     # Function to compute moving average
     def moving_average(data, window_size):
         return np.convolve(data, np.ones(window_size) / window_size, mode='valid')
@@ -195,7 +193,8 @@ def plot_loss_curves(plot_df,moving_window_length):
     ax0.set_xlabel('Epoch', fontsize=16, labelpad=15)
     ax0.set_ylabel('Loss', fontsize=16, labelpad=15)
     ax0.set_yscale('log')
-    ax0.set_ylim([0,.4])
+    ax0.set_ylim([0.00001,.4])
+    
     ax0.tick_params(axis='both', which='major', labelsize=14)
     ax0.grid(True, which='both', linestyle='--', linewidth=0.5)
     # ax0.legend(handles=handles, labels=labels, fontsize=12, loc='upper right', frameon=True, framealpha=1, shadow=True, borderpad=1)

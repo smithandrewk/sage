@@ -1,6 +1,7 @@
 from torch import nn
 import torch
 from torch.nn.functional import relu
+import copy
 
 class ConvLayerNorm(nn.Module):
     def __init__(self,out_channels) -> None:
@@ -75,10 +76,11 @@ class ResNetv2(nn.Module):
         x = self.classifier(x)
         return x
 
-import copy
 class Dumbledore(nn.Module):
     def __init__(self,encoder_experiment_name,sequence_length,hidden_size=16,num_layers=1,dropout=None,frozen_encoder=True) -> None:
         super().__init__()
+        if num_layers == 1:
+            dropout = None
         self.frozen = frozen_encoder
         self.sequence_length = sequence_length
         self.encoder = self.get_encoder(encoder_experiment_name)
@@ -93,7 +95,7 @@ class Dumbledore(nn.Module):
         x = self.classifier(x)
         return x
     def get_encoder(self,encoder_experiment_name):
-        state = torch.load(f'experiments/{encoder_experiment_name}/state.pt',map_location='cpu')
+        state = torch.load(f'experiments/{encoder_experiment_name}/state.pt',map_location='cpu',weights_only=False)
         encoder = copy.deepcopy(state['model'])
         encoder.load_state_dict(state['best_model_wts'])
         if self.frozen:
