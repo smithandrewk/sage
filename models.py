@@ -64,7 +64,7 @@ class ResNetv2(nn.Module):
         for _ in range(1,blocks):
             layers.append(block(out_channels,out_channels,3,1,norm=norm,dropout=dropout))
         return nn.Sequential(*layers)
-    def forward(self,x):
+    def forward(self,x,return_embedding=False):
         x = self.stem(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -72,8 +72,10 @@ class ResNetv2(nn.Module):
         x = self.layers(x)
 
         x = self.gap(x)
-        x = torch.flatten(x, 1)
-        x = self.classifier(x)
+        embedding = torch.flatten(x, 1)
+        x = self.classifier(embedding)
+        if return_embedding:
+            return x,embedding
         return x
 
 class Dumbledore(nn.Module):
