@@ -146,7 +146,7 @@ def plot_train_and_test_loss_in_plotly(df):
     fig.show(renderer='browser')
 
 
-def plot_loss_curves(plot_df,moving_window_length):
+def plot_loss_curves(plot_df,moving_window_length,lstm=False):
     plot_df.loc[plot_df['best_dev_f1'] == '','best_dev_f1'] = 0
     plot_df['best_dev_loss'] = plot_df['best_dev_loss'].astype(float)
     plot_df['best_dev_f1'] = plot_df['best_dev_f1'].astype(float)
@@ -172,8 +172,8 @@ def plot_loss_curves(plot_df,moving_window_length):
     sns.set(style="whitegrid")
 
     # Create a figure with a GridSpec layout
-    fig = plt.figure(figsize=(14, 8))
-    gs = GridSpec(1, 2, width_ratios=[3, 1])
+    fig = plt.figure(figsize=(9, 16))
+    gs = GridSpec(2,1, width_ratios=[1],height_ratios=[2,1])
 
     # Plotting the loss curves
     ax0 = plt.subplot(gs[0])
@@ -203,7 +203,10 @@ def plot_loss_curves(plot_df,moving_window_length):
 
     # Plotting the hyperparameters
     ax1 = plt.subplot(gs[1])
-    hyperparameters = plot_df[['best_dev_loss', 'sequence_length']]
+    if lstm:
+        hyperparameters = plot_df[['best_dev_loss', 'sequence_length','num_layers','dropout']]
+    else:
+        hyperparameters = plot_df[['best_dev_loss','batch_size','dropout']]
 
     # Add a color column to the hyperparameters DataFrame
     color_column = [''] * len(hyperparameters)
@@ -217,7 +220,7 @@ def plot_loss_curves(plot_df,moving_window_length):
     table = ax1.table(cellText=cell_text, colLabels=columns, cellLoc='center', loc='center', colWidths=[0.1]*len(columns))
     table.auto_set_font_size(False)
     table.set_fontsize(10)  # Adjusted font size for better fit
-    table.scale(5,5)  # Adjusted scale for better fit
+    table.scale(3,3)  # Adjusted scale for better fit
 
     # Set color for the color column cells
     for (i, j), cell in table.get_celld().items():
@@ -231,5 +234,5 @@ def plot_loss_curves(plot_df,moving_window_length):
     # Adjust layout
     plt.tight_layout()
     plt.subplots_adjust(wspace=0.3)
-
-    plt.show()
+    plt.savefig('losses.jpg',dpi=200,bbox_inches='tight')
+    # plt.show()
