@@ -79,13 +79,21 @@ class ResNetv2(nn.Module):
         return x
 
 class Dumbledore(nn.Module):
-    def __init__(self,encoder_experiment_name,sequence_length,hidden_size=16,num_layers=1,dropout=.1,frozen_encoder=True,bidirectional=True) -> None:
+    def __init__(self,encoder_experiment_name,sequence_length,hidden_size=16,num_layers=1,dropout=.1,frozen_encoder=True,bidirectional=True,use_embedding=False,pretrained_encoder=True) -> None:
         super().__init__()
         self.frozen = frozen_encoder
+        self.use_embedding = use_embedding
         self.bidirectional = bidirectional
         self.sequence_length = sequence_length
+        self.pretrained_encoder = pretrained_encoder
+
         self.encoder = self.get_encoder(encoder_experiment_name)
-        self.lstm = nn.LSTM(input_size=3, hidden_size=hidden_size, num_layers=num_layers, batch_first=True, dropout=dropout,bidirectional=bidirectional)
+        if self.use_embedding:
+            self.input_size = self.embedding_size
+        else:
+            self.input_size = 3
+        print(self.input_size)
+        self.lstm = nn.LSTM(input_size=self.input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True, dropout=dropout,bidirectional=bidirectional)
         if bidirectional:
             self.classifier = nn.Linear(in_features=hidden_size*2,out_features=3)
         else:
@@ -93,8 +101,11 @@ class Dumbledore(nn.Module):
 
     def forward(self,x):
         x = x.flatten(0,1)
-        x = self.encoder(x)
-        x = x.reshape(-1,self.sequence_length,3)
+        if self.use_embedding:
+            _,x = self.encoder(x,return_embedding=True)
+        else:
+            x = self.encoder(x)
+        x = x.reshape(-1,self.sequence_length,self.input_size)
         output, (hn, cn) = self.lstm(x)
 
         if self.bidirectional:
@@ -111,8 +122,18 @@ class Dumbledore(nn.Module):
         return x
     def get_encoder(self,encoder_experiment_path):
         state = torch.load(f'{encoder_experiment_path}/state.pt',map_location='cpu',weights_only=False)
-        encoder = copy.deepcopy(state['model'])
-        encoder.load_state_dict(state['best_model_wts'])
+        self.embedding_size = state['widthi'][-1]
+
+        if self.pretrained_encoder:
+            encoder = copy.deepcopy(state['model'])
+            encoder.load_state_dict(state['best_model_wts'])
+        else:
+            encoder = ResNetv2(ResBlockv2,
+                             widthi=state['widthi'],
+                             depthi=state['depthi'],
+                             n_output_neurons=3,norm=state['norm'],
+                             stem_kernel_size=state['stem_kernel_size'],
+                             dropout=state['dropout'])
         if self.frozen:
             print("Model is freezing encoder")
             for p in encoder.parameters():
