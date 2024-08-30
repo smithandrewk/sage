@@ -7,6 +7,11 @@ import numpy as np
 import seaborn as sns
 from matplotlib.gridspec import GridSpec
 import copy
+from time import time
+import matplotlib.pyplot as plt
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
 
 def count_params(model):
     return sum([p.flatten().size()[0] for p in list(model.parameters())])
@@ -36,7 +41,8 @@ def predict(model,dataloader):
     for Xi,_ in dataloader:
         ypreds.append(model(Xi).softmax(axis=1).argmax(axis=1))
     return torch.cat(ypreds)
-def train(state,trainloader,testloader):
+def train(state,trainloader,devloader,testloader,**kwargs):
+    last_time = time()
     state['model'].to(state['device'])
     pbar = tqdm(range(state['epochs']))
     epochs_without_improvement = 0
@@ -58,16 +64,16 @@ def train(state,trainloader,testloader):
         state['model'].eval()
         with torch.no_grad():
             loss_total = 0
-            for Xi,yi in testloader:
+            for Xi,yi in devloader:
                 Xi,yi = Xi.to(state['device']),yi.to(state['device'])
                 logits = state['model'](Xi)
                 loss = state['criterion'](logits,yi)
                 loss_total += loss.item()
 
-            state['testlossi'].append(loss_total/len(testloader))
-        state['scheduler'].step(state['testlossi'][-1])
-        if state['testlossi'][-1] < state['best_dev_loss']:
-            state['best_dev_loss'] = state['testlossi'][-1]
+            state['devlossi'].append(loss_total/len(devloader))
+        state['scheduler'].step(state['devlossi'][-1])
+        if state['devlossi'][-1] < state['best_dev_loss']:
+            state['best_dev_loss'] = state['devlossi'][-1]
             state['best_model_wts'] = copy.deepcopy(state['model'].state_dict())
             epochs_without_improvement = 0
         elif epochs_without_improvement >= state['patience']:
@@ -76,28 +82,26 @@ def train(state,trainloader,testloader):
         else:
             epochs_without_improvement += 1
 
-        pbar.set_description(f'{state["trainlossi"][-1]:.4f},{state["best_dev_loss"]:.4f}')
+        pbar.set_description(f'train: {state["trainlossi"][-1]:.4f}, dev: {state["devlossi"][-1]:.4f}, best_dev: {state["best_dev_loss"]:.4f}')
         yield state
         
     best_model = copy.deepcopy(state['model'])
     best_model.load_state_dict(state['best_model_wts'])
 
-    loss,y_true,y_pred = evaluate(dataloader=testloader,model=best_model,criterion=state['criterion'],device=state['device'])
+    loss,y_true,y_pred = evaluate(dataloader=devloader,model=best_model,criterion=state['criterion'],device=state['device'])
     state['best_dev_f1'] = f1_score(y_true,y_pred,average="macro")
+    state['execution_time'] = (state['execution_time'] + (time() - last_time))/2
     return state
 
-import matplotlib.pyplot as plt
 def plot_loss(state,experiments_path=f'experiments'):
     plt.figure()
-    plt.plot(state['trainlossi'][5:])
-    plt.plot(state['testlossi'][5:])
+    plt.plot(state['trainlossi'],label='train')
+    plt.plot(state['devlossi'],label='dev')
+    plt.plot(state['testlossi'],label='test')
     plt.yscale('log')
     plt.savefig(f'{experiments_path}/{state["start_time"]}/loss.jpg')
     plt.savefig(f'loss.jpg')
     plt.close()
-import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
 
 def plot_train_and_test_loss_in_plotly(df):
     # Extract trainloss and testloss
@@ -144,7 +148,6 @@ def plot_train_and_test_loss_in_plotly(df):
 
     # Show plot in browser
     fig.show(renderer='browser')
-
 
 def plot_loss_curves(plot_df,moving_window_length,lstm=False):
     plot_df.loc[plot_df['best_dev_f1'] == '','best_dev_f1'] = 0
@@ -204,7 +207,7 @@ def plot_loss_curves(plot_df,moving_window_length,lstm=False):
     # Plotting the hyperparameters
     ax1 = plt.subplot(gs[1])
     if lstm:
-        hyperparameters = plot_df[['best_dev_loss', 'sequence_length','num_layers','dropout']]
+        hyperparameters = plot_df[['best_dev_loss', 'sequence_length','hidden_size','num_layers','dropout','frozen_encoder','robust']]
     else:
         hyperparameters = plot_df[['best_dev_loss','batch_size','dropout']]
 
@@ -220,7 +223,8 @@ def plot_loss_curves(plot_df,moving_window_length,lstm=False):
     table = ax1.table(cellText=cell_text, colLabels=columns, cellLoc='center', loc='center', colWidths=[0.1]*len(columns))
     table.auto_set_font_size(False)
     table.set_fontsize(10)  # Adjusted font size for better fit
-    table.scale(3,3)  # Adjusted scale for better fit
+    table.scale(2,2)  # Adjusted scale for better fit
+
 
     # Set color for the color column cells
     for (i, j), cell in table.get_celld().items():
@@ -235,4 +239,4 @@ def plot_loss_curves(plot_df,moving_window_length,lstm=False):
     plt.tight_layout()
     plt.subplots_adjust(wspace=0.3)
     plt.savefig('losses.jpg',dpi=200,bbox_inches='tight')
-    # plt.show()
+    plt.close()
