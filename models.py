@@ -46,7 +46,7 @@ class ResBlockv2(nn.Module):
         return out
     
 class ResNetv2(nn.Module):
-    def __init__(self,block,widthi=[64],depthi=[2],n_output_neurons=3,norm='batch',stem_kernel_size=7,dropout=.05) -> None:
+    def __init__(self,block,widthi=[64],depthi=[2],n_output_neurons=3,norm='batch',stem_kernel_size=7,dropout=.05,**kwargs) -> None:
         super(ResNetv2, self).__init__()
         self.in_channels = widthi[0]
         self.stem = nn.Conv1d(1, widthi[0], kernel_size=stem_kernel_size, stride=2, padding=3, bias=False)
@@ -79,7 +79,7 @@ class ResNetv2(nn.Module):
         return x
 
 class Dumbledore(nn.Module):
-    def __init__(self,encoder_experiment_name,sequence_length,hidden_size=16,num_layers=1,dropout=.1,frozen_encoder=True,bidirectional=True) -> None:
+    def __init__(self,encoder_experiment_name,sequence_length,hidden_size=16,num_layers=1,dropout=.1,frozen_encoder=True,bidirectional=True,**kwargs) -> None:
         super().__init__()
         self.frozen = frozen_encoder
         self.bidirectional = bidirectional
