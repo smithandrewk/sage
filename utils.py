@@ -62,19 +62,18 @@ def train(state,trainloader,devloader,testloader,**kwargs):
         state['trainlossi'].append(loss_total/len(trainloader))
 
         state['model'].eval()
-        with torch.no_grad():
-            loss_total = 0
-            for Xi,yi in devloader:
-                Xi,yi = Xi.to(state['device']),yi.to(state['device'])
-                logits = state['model'](Xi)
-                loss = state['criterion'](logits,yi)
-                loss_total += loss.item()
 
-            state['devlossi'].append(loss_total/len(devloader))
+        with torch.no_grad():
+            loss,y_true,y_pred = evaluate(dataloader=devloader,model=state['model'],criterion=state['criterion'],device=state['device'])
+            state['devlossi'].append(loss)
+            state['devf1i'].append(f1_score(y_true,y_pred,average='macro'))
+
         state['scheduler'].step(state['devlossi'][-1])
+
         if state['devlossi'][-1] < state['best_dev_loss']:
             state['best_dev_loss'] = state['devlossi'][-1]
-            state['best_model_wts'] = copy.deepcopy(state['model'].state_dict())
+            state['best_dev_loss_epoch'] = len(state['devlossi'])-1
+            state['best_model_wts_dev_loss'] = copy.deepcopy(state['model'].state_dict())
             epochs_without_improvement = 0
         elif epochs_without_improvement >= state['patience']:
             state['early_stopping'] = True
@@ -86,20 +85,27 @@ def train(state,trainloader,devloader,testloader,**kwargs):
         yield state
         
     best_model = copy.deepcopy(state['model'])
-    best_model.load_state_dict(state['best_model_wts'])
+    best_model.load_state_dict(state['best_model_wts_dev_loss'])
 
     loss,y_true,y_pred = evaluate(dataloader=devloader,model=best_model,criterion=state['criterion'],device=state['device'])
     state['best_dev_f1'] = f1_score(y_true,y_pred,average="macro")
     state['execution_time'] = (state['execution_time'] + (time() - last_time))/2
     return state
 
-def plot_loss(state,experiments_path=f'experiments'):
-    plt.figure()
-    plt.plot(state['trainlossi'],label='train')
-    plt.plot(state['devlossi'],label='dev')
-    plt.plot(state['testlossi'],label='test')
+def plot_loss(state,experiment_path):
+    fig,axes = plt.subplots(nrows=1,ncols=2,figsize=(16,9))
+    axes[0].plot(state['trainlossi'],label='train')
+    axes[0].plot(state['devlossi'],label='dev')
+    axes[0].plot(state['testlossi'],label='test')
+    axes[0].axvline(state['best_dev_loss_epoch'],color='C1',label='best_dev_loss')
+    axes[0].axvline(state['best_test_loss_epoch'],color='C2',label='best_test_loss')
+    axes[1].plot(state['devf1i'],color='C1',label='dev')
+    axes[1].plot(state['testf1i'],color='C2',label='test')
+    axes[1].axvline(state['best_dev_loss_epoch'],color='C1',label='best_dev_loss')
+    axes[1].axvline(state['best_test_loss_epoch'],color='C2',label='best_test_loss')
+    plt.legend()
     plt.yscale('log')
-    plt.savefig(f'{experiments_path}/{state["start_time"]}/loss.jpg')
+    plt.savefig(f'{experiment_path}/loss.jpg')
     plt.savefig(f'loss.jpg')
     plt.close()
 
