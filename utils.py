@@ -19,6 +19,7 @@ def count_params(model):
 def evaluate(dataloader,model,criterion,device='cuda'):
     model.eval()
     model.to(device)
+    criterion.to(device)
     from tqdm import tqdm
     with torch.no_grad():
         loss_total = 0
@@ -41,9 +42,10 @@ def predict(model,dataloader):
     for Xi,_ in dataloader:
         ypreds.append(model(Xi).softmax(axis=1).argmax(axis=1))
     return torch.cat(ypreds)
-def train(state,trainloader,devloader,testloader,**kwargs):
+def train(state,trainloader,devloader,**kwargs):
     last_time = time()
     state['model'].to(state['device'])
+    state['criterion'].to(state['device'])
     pbar = tqdm(range(state['epochs']))
     epochs_without_improvement = 0
 

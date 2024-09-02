@@ -112,7 +112,7 @@ class Dumbledore(nn.Module):
     def get_encoder(self,encoder_experiment_path):
         state = torch.load(f'{encoder_experiment_path}/state.pt',map_location='cpu',weights_only=False)
         encoder = copy.deepcopy(state['model'])
-        encoder.load_state_dict(state['best_model_wts'])
+        encoder.load_state_dict(state['best_model_wts_dev_loss'])
         if self.frozen:
             print("Model is freezing encoder")
             for p in encoder.parameters():
