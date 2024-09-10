@@ -52,6 +52,8 @@ def train(state,trainloader,devloader,**kwargs):
     for _ in pbar:
         state['model'].train()
 
+        all_trues = []
+        all_preds = []
         loss_total = 0
         for Xi,yi in trainloader:
             Xi,yi = Xi.to(state['device']),yi.to(state['device'])
@@ -61,10 +63,19 @@ def train(state,trainloader,devloader,**kwargs):
             loss.backward()
             state['optimizer'].step()
             loss_total += loss.item()
+        
+            # Collect predictions and labels for F1 score calculation
+            all_preds.append(logits.argmax(dim=1).detach().cpu().numpy())
+            all_trues.append(yi.argmax(dim=1).detach().cpu().numpy())
+        
         state['trainlossi'].append(loss_total/len(trainloader))
 
-        state['model'].eval()
+        # Calculate training F1 score using collected predictions and labels
+        all_trues = np.concatenate(all_trues)
+        all_preds = np.concatenate(all_preds)
+        state['trainf1i'].append(f1_score(all_trues, all_preds, average='macro'))
 
+        state['model'].eval()
         with torch.no_grad():
             loss,y_true,y_pred = evaluate(dataloader=devloader,model=state['model'],criterion=state['criterion'],device=state['device'])
             state['devlossi'].append(loss)
@@ -72,6 +83,8 @@ def train(state,trainloader,devloader,**kwargs):
 
         state['scheduler'].step(state['devlossi'][-1])
 
+        # TODO : could be potentiially early stopper.step()
+        # Track best dev loss and save model weights and early stopping
         if state['devlossi'][-1] < state['best_dev_loss']:
             state['best_dev_loss'] = state['devlossi'][-1]
             state['best_dev_loss_epoch'] = len(state['devlossi'])-1
@@ -83,28 +96,34 @@ def train(state,trainloader,devloader,**kwargs):
         else:
             epochs_without_improvement += 1
 
+        # Track best dev f1 and save model weights
+        if state['devf1i'][-1] > state['best_dev_f1']:
+            state['best_dev_f1'] = state['devf1i'][-1]
+            state['best_dev_f1_epoch'] = len(state['devf1i'])-1
+            state['best_model_wts_dev_f1'] = copy.deepcopy(state['model'].state_dict())
+        
+        # Moving average for execution time of an epoch
+        state['execution_time'] = (state['execution_time'] + (time() - last_time))/2
         pbar.set_description(f'train: {state["trainlossi"][-1]:.4f}, dev: {state["devlossi"][-1]:.4f}, best_dev: {state["best_dev_loss"]:.4f}')
         yield state
         
-    best_model = copy.deepcopy(state['model'])
-    best_model.load_state_dict(state['best_model_wts_dev_loss'])
-
-    loss,y_true,y_pred = evaluate(dataloader=devloader,model=best_model,criterion=state['criterion'],device=state['device'])
-    state['best_dev_f1'] = f1_score(y_true,y_pred,average="macro")
-    state['execution_time'] = (state['execution_time'] + (time() - last_time))/2
     return state
 
 def plot_loss(state,experiment_path):
-    fig,axes = plt.subplots(nrows=1,ncols=2,figsize=(16,9))
-    axes[0].plot(state['trainlossi'],label='train')
-    axes[0].plot(state['devlossi'],label='dev')
-    axes[0].plot(state['testlossi'],label='test')
-    axes[0].axvline(state['best_dev_loss_epoch'],color='C1',label='best_dev_loss')
-    axes[0].axvline(state['best_test_loss_epoch'],color='C2',label='best_test_loss')
-    axes[1].plot(state['devf1i'],color='C1',label='dev')
-    axes[1].plot(state['testf1i'],color='C2',label='test')
-    axes[1].axvline(state['best_dev_loss_epoch'],color='C1',label='best_dev_loss')
-    axes[1].axvline(state['best_test_loss_epoch'],color='C2',label='best_test_loss')
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 4.2))
+    colors = ['C0', 'C1', 'C2', 'C3', 'C4']
+    axes[0].plot(state['trainlossi'], color=colors[0], linestyle='-', label='train')
+    axes[0].plot(state['devlossi'], color=colors[0], linestyle=':', label='val')
+    axes[0].axvline(state['best_dev_loss_epoch'], color=colors[0], linestyle=':')
+    axes[0].axhline(state['best_dev_loss'], color=colors[0], linestyle=':')
+
+    axes[1].plot(state['trainf1i'], color=colors[0], linestyle='-', label='train')
+    axes[1].plot(state['devf1i'], color=colors[0], linestyle=':', label='val')
+    axes[1].axvline(state['best_dev_loss_epoch'], color=colors[0], linestyle=':')
+    axes[1].axvline(state['best_dev_f1_epoch'], color=colors[1], linestyle=':')
+    axes[1].axhline(state['devf1i'][state['best_dev_loss_epoch']], color=colors[0], linestyle=':')
+    axes[1].axhline(state['devf1i'][state['best_dev_f1_epoch']], color=colors[1], linestyle=':')
+
     plt.legend()
     plt.yscale('log')
     plt.savefig(f'{experiment_path}/loss.jpg')
