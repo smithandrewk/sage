@@ -49,7 +49,7 @@ class ResNetv2(nn.Module):
     def __init__(self,block,widthi=[64],depthi=[2],n_output_neurons=3,norm='batch',stem_kernel_size=7,dropout=.05,**kwargs) -> None:
         super(ResNetv2, self).__init__()
         self.in_channels = widthi[0]
-        self.stem = nn.Conv1d(1, widthi[0], kernel_size=stem_kernel_size, stride=2, padding=3, bias=False)
+        self.stem = nn.Conv1d(3, widthi[0], kernel_size=stem_kernel_size, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm1d(widthi[0])
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool1d(kernel_size=3, stride=2, padding=1)

@@ -37,6 +37,29 @@ def evaluate(dataloader,model,criterion,device='cuda'):
     y_pred = torch.cat(y_pred)
 
     return loss_total/len(dataloader),y_true,y_pred
+
+def evaluate_sigmoid(dataloader,model,criterion,device='cuda'):
+    model.eval()
+    model.to(device)
+    criterion.to(device)
+    from tqdm import tqdm
+    with torch.no_grad():
+        loss_total = 0
+        y_true = []
+        y_pred = []
+        for Xi,yi in dataloader:
+            Xi,yi = Xi.to(device),yi.to(device)
+            logits = model(Xi)
+            loss = criterion(logits,yi)
+            loss_total += loss.item()
+
+            y_true.append(yi.cpu())
+            y_pred.append(logits.sigmoid().round().cpu())
+    y_true = torch.cat(y_true)
+    y_pred = torch.cat(y_pred)
+
+    return loss_total/len(dataloader),y_true,y_pred
+
 def predict(model,dataloader):
     ypreds = []
     for Xi,_ in dataloader:
@@ -64,7 +87,6 @@ def train(state,trainloader,devloader,**kwargs):
             state['optimizer'].step()
             loss_total += loss.item()
         
-            # Collect predictions and labels for F1 score calculation
             all_preds.append(logits.argmax(dim=1).detach().cpu().numpy())
             all_trues.append(yi.argmax(dim=1).detach().cpu().numpy())
         
@@ -108,8 +130,73 @@ def train(state,trainloader,devloader,**kwargs):
         yield state
         
     return state
+def train_sigmoid(state,trainloader,devloader,**kwargs):
+    last_time = time()
+    state['model'].to(state['device'])
+    state['criterion'].to(state['device'])
+    pbar = tqdm(range(state['epochs']))
+    epochs_without_improvement = 0
 
-def plot_loss(state,experiment_path):
+    for _ in pbar:
+        state['model'].train()
+
+        all_trues = []
+        all_preds = []
+        loss_total = 0
+        for Xi,yi in trainloader:
+            Xi,yi = Xi.to(state['device']),yi.to(state['device'])
+            logits = state['model'](Xi)
+            loss = state['criterion'](logits,yi)
+            state['optimizer'].zero_grad()
+            loss.backward()
+            state['optimizer'].step()
+            loss_total += loss.item()
+        
+            # Collect predictions and labels for F1 score calculation
+            all_preds.append(logits.sigmoid().round().detach().cpu().numpy())
+            all_trues.append(yi.detach().cpu().numpy())
+        
+        state['trainlossi'].append(loss_total/len(trainloader))
+
+        # Calculate training F1 score using collected predictions and labels
+        all_trues = np.concatenate(all_trues)
+        all_preds = np.concatenate(all_preds)
+        state['trainf1i'].append(f1_score(all_trues, all_preds, average='macro'))
+
+        state['model'].eval()
+        with torch.no_grad():
+            loss,y_true,y_pred = evaluate_sigmoid(dataloader=devloader,model=state['model'],criterion=state['criterion'],device=state['device'])
+            state['devlossi'].append(loss)
+            state['devf1i'].append(f1_score(y_true,y_pred,average='macro'))
+
+        state['scheduler'].step(state['devlossi'][-1])
+
+        # TODO : could be potentiially early stopper.step()
+        # Track best dev loss and save model weights and early stopping
+        if state['devlossi'][-1] < state['best_dev_loss']:
+            state['best_dev_loss'] = state['devlossi'][-1]
+            state['best_dev_loss_epoch'] = len(state['devlossi'])-1
+            state['best_model_wts_dev_loss'] = copy.deepcopy(state['model'].state_dict())
+            epochs_without_improvement = 0
+        elif epochs_without_improvement >= state['patience']:
+            state['early_stopping'] = True
+            break
+        else:
+            epochs_without_improvement += 1
+
+        # Track best dev f1 and save model weights
+        if state['devf1i'][-1] > state['best_dev_f1']:
+            state['best_dev_f1'] = state['devf1i'][-1]
+            state['best_dev_f1_epoch'] = len(state['devf1i'])-1
+            state['best_model_wts_dev_f1'] = copy.deepcopy(state['model'].state_dict())
+        
+        # Moving average for execution time of an epoch
+        state['execution_time'] = (state['execution_time'] + (time() - last_time))/2
+        pbar.set_description(f'train: {state["trainlossi"][-1]:.4f}, dev: {state["devlossi"][-1]:.4f}, best_dev: {state["best_dev_loss"]:.4f}')
+        yield state
+        
+    return state
+def plot_loss(state,experiment_path='.'):
     fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 4.2))
     colors = ['C0', 'C1', 'C2', 'C3', 'C4']
     axes[0].plot(state['trainlossi'], color=colors[0], linestyle='-', label='train')
@@ -125,7 +212,7 @@ def plot_loss(state,experiment_path):
     axes[1].axhline(state['devf1i'][state['best_dev_f1_epoch']], color=colors[1], linestyle=':')
 
     plt.legend()
-    plt.yscale('log')
+    # plt.yscale('log')
     plt.savefig(f'{experiment_path}/loss.jpg')
     plt.savefig(f'loss.jpg')
     plt.close()
